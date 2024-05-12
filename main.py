@@ -28,10 +28,7 @@ with st.sidebar:
     "Sandwiches", "Shawarma", "Silog", "Siomai", "Snacks", 
     "Soups", "Student Meal"
     ]
-    selected_cuisines = {}
-    # Loop through the list and create a checkbox for each item
-    for cuisine in cuisines:
-        selected_cuisines[cuisine] = st.checkbox(cuisine)
+    selected_cuisines = st.multiselect("**Filter by Cuisine**", cuisines)
     
     
     
