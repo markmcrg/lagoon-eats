@@ -1,37 +1,108 @@
+from xml.dom.minidom import Attr
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title='Lagoon Eats', page_icon='🍔', layout='wide', initial_sidebar_state='auto')
 
-# Sidebar
+# Load data from Google Sheets
+url = "https://docs.google.com/spreadsheets/d/1oW8ds8_wGrU3HfnYlBvnQwUv9jr_AjxqlpBUndO4G0E/edit?usp=sharing"
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Load data and set cache to minimize reloading
+@st.cache_resource
+def load_data():
+    stall_info_df = conn.read(spreadsheet=url, ttl="10m")
+    item_info_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1266150423")
+    user_ratings_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1710965474")
+    return stall_info_df, item_info_df, user_ratings_df
+
+stall_info_df, item_info_df, user_ratings_df = load_data()
+
+# Sidebar filters and options
 with st.sidebar:
     st.title('🍔 Lagoon Eats')
+    sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Low to High", "High to Low"))
     st.header("Filters")
     
-    # Checkbox for sorting by price
-    st.subheader("Sort By")
-    sort_price = st.radio("Price", ("Low to High", "High to Low"))
+    # Filter by Price
+    price_filter = st.toggle("Filter by Price")
+    if price_filter:
+        price_range = st.slider("Select Price Range", 5, 300, (30, 100))
     
-    # Slider for price range filter
-    st.subheader("Price Range")
-    price_range = st.slider("Select Price Range", 20, 200, (30, 100)) 
+    # Filter by Rating
+    rating_filter = st.toggle("Filter by Rating")
+    if rating_filter:
+        rating = st.radio("Select Rating", ["⭐ 5.0", "⭐ 4.0 & Up", "⭐ 3.0 & Up", "⭐ 2.0 & Up", "⭐ 1.0 & Up"])
+        min_rating = float(rating.split()[1])
+    else:
+        min_rating = 0
     
-    # Radio buttons for selecting rating filter
-    st.subheader("Rating")
-    rating_filter = st.radio("Select Rating", ("⭐ 5.0", "⭐ 4.0 & Up", "⭐ 3.0 & Up", "⭐ 2.0 & Up", "⭐ 1.0 & Up"))
-    
-    # Checkbox for selecting cuisine
-    st.subheader("Cuisine")
+    # Filter by Cuisine
     cuisines = [
-    "Asian", "Beverages", "Bread", "Burgers", "Chicken", 
-    "Coffee", "Desserts", "Filipino", "Fries", "Healthy", 
-    "Ice Cream", "Noodles", "Rice Bowl", "Rice Dishes", 
-    "Sandwiches", "Shawarma", "Silog", "Siomai", "Snacks", 
-    "Soups", "Student Meal"
+        "Asian", "Beverages", "Bread", "Burgers", "Chicken", 
+        "Coffee", "Desserts", "Filipino", "Fries", "Healthy", 
+        "Ice Cream", "Noodles", "Rice Bowl", "Rice Dishes", 
+        "Sandwiches", "Shawarma", "Silog", "Siomai", "Snacks", 
+        "Soups", "Student Meal"
     ]
-    selected_cuisines = st.multiselect("**Filter by Cuisine**", cuisines)
-    
-    
-    
-st.text_input("Search for a food stall", placeholder="Type here...")
-st.button("Search")
+    selected_cuisines = st.multiselect("Filter by Cuisine", cuisines)
 
+# Search form
+with st.form('search_form'):
+    col1, col2 = st.columns([8,1])
+    stall_query = col1.text_input("Enter Food Stall Name:", placeholder="Search for a stall...", label_visibility='collapsed')
+    submitted = col2.form_submit_button('🔍 Search')
+    
+def create_card(stall_name, lowest_price, highest_price, opening_time, closing_time, days_closed, tags, stall_img_url, promo):
+    card = st.container(border=True)
+    with card:
+        st.image(stall_img_url, use_column_width=True)
+        st.write(f"**{stall_name}**")
+        st.caption(f"**Price Range:** ₱{lowest_price} - ₱{highest_price}")
+        st.caption(f"**Opening Hours:** {opening_time} - {closing_time}")
+        st.caption(f"**Days Closed:** {days_closed}")
+        st.caption(f"**Tags:** {tags}")
+        st.caption(f"**Promo:** {promo}")
+        
+# Filter and sort logic
+def filter_sort_stalls(df):
+    if stall_query:
+        df = df[df['stall_name'].str.contains(stall_query, case=False, na=False)]
+    if price_filter:
+        df = df[(df['lowest_price'] >= price_range[0]) & (df['highest_price'] <= price_range[1])]
+    if rating_filter:
+        df = df[df['rating'] >= min_rating]
+    if selected_cuisines:
+        df = df[df['cuisine'].isin(selected_cuisines)]
+    return df
+
+# Apply filters and sorting
+filtered_stalls = filter_sort_stalls(stall_info_df)
+
+# Sorting
+if sort_price == "A-Z":
+    filtered_stalls.sort_values(by='stall_name', inplace=True)
+elif sort_price == "Z-A":
+    filtered_stalls.sort_values(by='stall_name', inplace=True, ascending=False)
+elif sort_price == "Low to High":
+    filtered_stalls.sort_values(by='lowest_price', inplace=True)
+elif sort_price == "High to Low":
+    filtered_stalls.sort_values(by='highest_price', inplace=True)
+
+# Display stalls in a grid layout
+def display_stalls(filtered_stalls):
+    try:
+        n_cards_per_row = 3
+        rows = [filtered_stalls.iloc[i:i + n_cards_per_row] for i in range(0, len(filtered_stalls), n_cards_per_row)]
+        for row in rows:
+            cols = st.columns(n_cards_per_row)
+            for idx, col in enumerate(cols):
+                with col:
+                    if idx < len(row):
+                        stall = row.iloc[idx]
+                        create_card(stall['stall_name'], stall['lowest_price'], stall['highest_price'], stall['opening_time'], stall['closing_time'], stall['days_closed'], stall['tags'], stall['stall_img_url'], stall['promo'])
+    except AttributeError:
+        pass
+
+filtered_stalls = filter_sort_stalls(stall_info_df)
+display_stalls(filtered_stalls)
