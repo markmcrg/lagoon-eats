@@ -9,7 +9,7 @@ url = "https://docs.google.com/spreadsheets/d/1oW8ds8_wGrU3HfnYlBvnQwUv9jr_Ajxql
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Load data and set cache to minimize reloading
-@st.cache_resource
+@st.cache_data
 def load_data():
     stall_info_df = conn.read(spreadsheet=url, ttl="10m")
     item_info_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1266150423")
@@ -22,8 +22,8 @@ stall_info_df, item_info_df, user_ratings_df = load_data()
 with st.sidebar:
     st.title('🍔 Lagoon Eats')
     sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Low to High", "High to Low"))
-    st.header("Filters")
     
+    st.header("Filters")
     # Filter by Price
     price_filter = st.toggle("Filter by Price")
     if price_filter:
@@ -64,14 +64,18 @@ def create_card(stall_name, lowest_price, highest_price, opening_time, closing_t
         st.caption(f"**Tags:** {tags}")
         st.caption(f"**Promo:** {promo}")
         
+        if st.button("View Details", key=stall_name):
+            stall_dialog(stall_name, stall_img_url, "Stall Info", "Item Info", "User Ratings")
+        
+        
 # Filter and sort logic
 def filter_sort_stalls(df):
     if stall_query:
         df = df[df['stall_name'].str.contains(stall_query, case=False, na=False)]
     if price_filter:
         df = df[(df['lowest_price'] >= price_range[0]) & (df['highest_price'] <= price_range[1])]
-    if rating_filter:
-        df = df[df['rating'] >= min_rating]
+    # if rating_filter:
+    #     df = df[df['rating'] >= min_rating]
     if selected_cuisines:
         df = df[df['cuisine'].isin(selected_cuisines)]
     return df
@@ -87,7 +91,7 @@ elif sort_price == "Z-A":
 elif sort_price == "Low to High":
     filtered_stalls.sort_values(by='lowest_price', inplace=True)
 elif sort_price == "High to Low":
-    filtered_stalls.sort_values(by='highest_price', inplace=True)
+    filtered_stalls.sort_values(by='lowest_price', inplace=True, ascending=False)
 
 # Display stalls in a grid layout
 def display_stalls(filtered_stalls):
@@ -104,5 +108,13 @@ def display_stalls(filtered_stalls):
     except AttributeError:
         pass
 
-filtered_stalls = filter_sort_stalls(stall_info_df)
+@st.experimental_dialog("Stall Details")
+def stall_dialog(stall_name, stall_img_url, stall_info, item_info, user_ratings):
+    st.image(stall_img_url, use_column_width=True)
+    st.write(f"**{stall_name}**")
+    st.caption(f"**{stall_info}**")
+    st.caption(f"**{item_info}**")
+    st.caption(f"**{user_ratings}**")
+
+
 display_stalls(filtered_stalls)
