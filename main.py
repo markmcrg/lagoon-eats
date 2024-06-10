@@ -47,6 +47,7 @@ with st.sidebar:
     ]
     selected_cuisines = st.multiselect("Filter by Cuisine", cuisines)
 
+
 # Search form
 with st.form('search_form'):
     col1, col2 = st.columns([8,1])
@@ -77,7 +78,9 @@ def filter_sort_stalls(df):
     # if rating_filter:
     #     df = df[df['rating'] >= min_rating]
     if selected_cuisines:
-        df = df[df['cuisine'].isin(selected_cuisines)]
+        # Create a regex pattern to match any of the selected cuisines
+        pattern = '|'.join(selected_cuisines)
+        df = df[df['tags'].str.contains(pattern, case=False, na=False)]
     return df
 
 # Apply filters and sorting
@@ -115,6 +118,5 @@ def stall_dialog(stall_name, stall_img_url, stall_info, item_info, user_ratings)
     st.caption(f"**{stall_info}**")
     st.caption(f"**{item_info}**")
     st.caption(f"**{user_ratings}**")
-
 
 display_stalls(filtered_stalls)
