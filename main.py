@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 from streamlit_searchbox import st_searchbox
 from helpers.create_card import create_card
+from helpers.merge_sort import merge_sort
 
 st.set_page_config(page_title='Lagoon Eats', page_icon='🍔', layout='wide', initial_sidebar_state='auto')
 
@@ -10,7 +11,7 @@ url = "https://docs.google.com/spreadsheets/d/1oW8ds8_wGrU3HfnYlBvnQwUv9jr_Ajxql
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Load data and set cache to minimize reloading
-@st.cache_data
+@st.cache_data(show_spinner="Fetching data...")
 def load_data():
     stall_info_df = conn.read(spreadsheet=url, ttl="10m")
     item_info_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1266150423")
@@ -24,7 +25,7 @@ with st.sidebar:
     clear_cache = st.button("Clear Cache")
     if clear_cache:
         st.cache_data.clear()
-    sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Low to High", "High to Low"))
+    sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Price: Low to High", "Price: High to Low"))
     
     st.header("Filters")
     # Filter by Price
@@ -57,14 +58,14 @@ with st.form('search_form'):
     stall_query = col1.text_input("Enter Food Stall Name:", placeholder="Search for a stall...", label_visibility='collapsed')
     submitted = col2.form_submit_button('🔍 Search')    
         
-# Filter and sort logic
-def filter_sort_stalls(df):
+# Filter logic
+def filter_stalls(df):
     if stall_query:
         df = df[df['stall_name'].str.contains(stall_query, case=False, na=False)]
     if price_filter:
         df = df[(df['lowest_price'] >= price_range[0]) & (df['highest_price'] <= price_range[1])]
-    # if rating_filter:
-    #     df = df[df['rating'] >= min_rating]
+    if rating_filter:
+        df = df[df['rating'] >= min_rating]
     if selected_cuisines:
         # Create a regex pattern to match any of the selected cuisines
         pattern = '|'.join(selected_cuisines)
@@ -72,17 +73,17 @@ def filter_sort_stalls(df):
     return df
 
 # Apply filters and sorting
-filtered_stalls = filter_sort_stalls(stall_info_df)
+filtered_stalls = filter_stalls(stall_info_df)
 
-# Sorting
+# Sorting logic
 if sort_price == "A-Z":
-    filtered_stalls.sort_values(by='stall_name', inplace=True)
+    filtered_stalls = merge_sort(filtered_stalls, 'stall_name', ascending=True)
 elif sort_price == "Z-A":
-    filtered_stalls.sort_values(by='stall_name', inplace=True, ascending=False)
-elif sort_price == "Low to High":
-    filtered_stalls.sort_values(by='lowest_price', inplace=True)
-elif sort_price == "High to Low":
-    filtered_stalls.sort_values(by='lowest_price', inplace=True, ascending=False)
+    filtered_stalls = merge_sort(filtered_stalls, 'stall_name', ascending=False)
+elif sort_price == "Price: Low to High":
+    filtered_stalls = merge_sort(filtered_stalls, 'lowest_price', ascending=True)
+elif sort_price == "Price: High to Low":
+    filtered_stalls = merge_sort(filtered_stalls, 'lowest_price', ascending=False)
 
 # Display stalls in a grid layout
 def display_stalls(filtered_stalls):
