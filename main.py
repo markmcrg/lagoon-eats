@@ -43,25 +43,81 @@ with st.sidebar:
     
     # Filter by Cuisine
     cuisines = [
-        "Asian", "Beverages", "Bread", "Burgers", "Chicken", 
-        "Coffee", "Desserts", "Filipino", "Fries", "Healthy", 
-        "Ice Cream", "Noodles", "Rice Bowl", "Rice Dishes", 
-        "Sandwiches", "Shawarma", "Silog", "Siomai", "Snacks", 
-        "Soups", "Student Meal"
+        "Beverages", "Burgers", "Chicken", 
+        "Coffee", "Filipino", "Fries", 
+        "Ice Cream", "Noodles", "Rice Bowl", 
+        "Rice Dishes", "Silog", "Siomai", "Snacks", 
     ]
     selected_cuisines = st.multiselect("Filter by Cuisine", cuisines)
 
+def bad_character_table(pattern: str):
+    """ Generates the bad character table. """
+    table = {}
+    length = len(pattern)
+    for i in range(length - 1):
+        table[pattern[i]] = length - i - 1
+    return table
+
+def boyer_moore_search(text: str, pattern: str):
+    """ Performs the Boyer-Moore search algorithm. """
+    if not pattern or not text:
+        return False
+    
+    bad_char_table = bad_character_table(pattern)
+    m = len(pattern)
+    n = len(text)
+
+    i = 0
+    while i <= n - m:
+        j = m - 1
+        while j >= 0 and pattern[j] == text[i + j]:
+            j -= 1
+        if j < 0:
+            return True
+        else:
+            i += bad_char_table.get(text[i + j], m)
+    return False
+
+# Search logic
+def search_stall(query: str):
+    # Get all stall names from df
+    stall_names = stall_info_df['stall_name'].tolist()
+    # Loop through all stall names
+    result = []
+    for stall in stall_names:
+        if boyer_moore_search(stall.lower(), query.lower()):
+            result.append(stall)
+    return result
+
+def show_stall_results(df):
+    result = []
+    stall_names = df['stall_name'].tolist()
+    for stall in stall_names:
+        if boyer_moore_search(stall.lower(), stall_query.lower()):
+            result.append(stall)
+            
+    # Return a df with all matching stall names in list
+    df = df[df['stall_name'].isin(result)]
+    return df
 
 # Search form
-with st.form('search_form'):
+with st.container(border=True):
     col1, col2 = st.columns([8,1])
-    stall_query = col1.text_input("Enter Food Stall Name:", placeholder="Search for a stall...", label_visibility='collapsed')
-    submitted = col2.form_submit_button('🔍 Search')    
-        
+    with col1:
+        stall_query = st_searchbox(
+            placeholder="Search for a stall...", 
+            key='search_query', 
+            search_function=search_stall,
+            default_use_searchterm=True,
+            edit_after_submit="option"
+        )  
+    with col2:
+        submitted = st.button('🔍 Search')    
+    
 # Filter logic
 def filter_stalls(df):
     if stall_query:
-        df = df[df['stall_name'].str.contains(stall_query, case=False, na=False)]
+        df = show_stall_results(df)
     if price_filter:
         df = df[(df['lowest_price'] >= price_range[0]) & (df['highest_price'] <= price_range[1])]
     if rating_filter:
