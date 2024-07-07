@@ -1,6 +1,7 @@
 from xml.dom.minidom import Attr
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
+from streamlit_searchbox import st_searchbox
 
 st.set_page_config(page_title='Lagoon Eats', page_icon='🍔', layout='wide', initial_sidebar_state='auto')
 
@@ -13,14 +14,16 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     stall_info_df = conn.read(spreadsheet=url, ttl="10m")
     item_info_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1266150423")
-    user_ratings_df = conn.read(spreadsheet=url, ttl="10m", worksheet="1710965474")
-    return stall_info_df, item_info_df, user_ratings_df
+    return stall_info_df, item_info_df
 
-stall_info_df, item_info_df, user_ratings_df = load_data()
+stall_info_df, item_info_df  = load_data()
 
 # Sidebar filters and options
 with st.sidebar:
     st.title('🍔 Lagoon Eats')
+    clear_cache = st.button("Clear Cache")
+    if clear_cache:
+        st.cache_data.clear()
     sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Low to High", "High to Low"))
     
     st.header("Filters")
@@ -54,7 +57,7 @@ with st.form('search_form'):
     stall_query = col1.text_input("Enter Food Stall Name:", placeholder="Search for a stall...", label_visibility='collapsed')
     submitted = col2.form_submit_button('🔍 Search')
     
-def create_card(stall_name, lowest_price, highest_price, opening_time, closing_time, days_closed, tags, stall_img_url, promo):
+def create_card(stall_id, stall_name, lowest_price, highest_price, opening_time, closing_time, days_closed, tags, stall_img_url, promo):
     card = st.container(border=True)
     with card:
         st.image(stall_img_url, use_column_width=True)
@@ -66,7 +69,7 @@ def create_card(stall_name, lowest_price, highest_price, opening_time, closing_t
         st.caption(f"**Promo:** {promo}")
         
         if st.button("View Details", key=stall_name):
-            stall_dialog(stall_name, stall_img_url, "Stall Info", "Item Info", "User Ratings")
+            stall_dialog(stall_id, stall_name, stall_img_url, "Stall Info", "Item Info", "User Ratings")
         
         
 # Filter and sort logic
@@ -99,7 +102,7 @@ elif sort_price == "High to Low":
 # Display stalls in a grid layout
 def display_stalls(filtered_stalls):
     try:
-        n_cards_per_row = 3
+        n_cards_per_row = 4
         rows = [filtered_stalls.iloc[i:i + n_cards_per_row] for i in range(0, len(filtered_stalls), n_cards_per_row)]
         for row in rows:
             cols = st.columns(n_cards_per_row)
@@ -107,16 +110,35 @@ def display_stalls(filtered_stalls):
                 with col:
                     if idx < len(row):
                         stall = row.iloc[idx]
-                        create_card(stall['stall_name'], stall['lowest_price'], stall['highest_price'], stall['opening_time'], stall['closing_time'], stall['days_closed'], stall['tags'], stall['stall_img_url'], stall['promo'])
+                        # Generate stall info
+                        create_card(stall['stall_id'],stall['stall_name'], stall['lowest_price'], stall['highest_price'], stall['opening_time'], stall['closing_time'], stall['days_closed'], stall['tags'], stall['stall_img_url'], stall['promo'])
     except AttributeError:
         pass
 
-@st.experimental_dialog("Stall Details")
-def stall_dialog(stall_name, stall_img_url, stall_info, item_info, user_ratings):
-    st.image(stall_img_url, use_column_width=True)
-    st.write(f"**{stall_name}**")
-    st.caption(f"**{stall_info}**")
-    st.caption(f"**{item_info}**")
-    st.caption(f"**{user_ratings}**")
+@st.experimental_dialog("Stall Details", width="large")
+def stall_dialog(stall_id, stall_name, stall_img_url, stall_info, item_info, user_ratings):
+    # Filter item_info_df by stall id to show available items and convert to dict
+    menu_df = item_info_df[item_info_df['stall_id'] == stall_id]
+    menu_df['price'] = menu_df['price'].astype()
+    menu = menu_df.to_dict(orient='records')
+    # lowest to highest price
+    # rating
+    tab1, tab2 = st.tabs(["Menu", "Mix & Match"])
+    with tab1:
+        st.subheader("Menu")
+        n_cards_per_row = 2
+        cols = st.columns(n_cards_per_row)
+        for idx, item in enumerate(menu):
+            col = cols[idx % n_cards_per_row]
+            with col.container(border=True):
+                st.write(f"**{item['item_name']}** - ₱{item['price']}")
+                
+
+    with tab2:
+        st.write("mix and match")
 
 display_stalls(filtered_stalls)
+
+# TO ADD:
+# Autocomplete search
+# make mergesort.py
