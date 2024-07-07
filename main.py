@@ -1,4 +1,3 @@
-from xml.dom.minidom import Attr
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 from streamlit_searchbox import st_searchbox
