@@ -22,9 +22,6 @@ stall_info_df, item_info_df = load_data()
 # Sidebar filters and options
 with st.sidebar:
     st.title('🍔 Lagoon Eats')
-    clear_cache = st.button("Clear Cache")
-    if clear_cache:
-        st.cache_data.clear()
     sort_price = st.radio("Sort By", ("A-Z", "Z-A", "Price: Low to High", "Price: High to Low"))
     
     st.header("Filters")
@@ -89,16 +86,21 @@ def search_stall(query: str):
             result.append(stall)
     return result
 
-def show_stall_results(df):
-    result = []
-    stall_names = df['stall_name'].tolist()
-    for stall in stall_names:
-        if boyer_moore_search(stall.lower(), stall_query.lower()):
-            result.append(stall)
+# def show_stall_results(df):
+#     result = []
+#     stall_names = df['stall_name'].tolist()
+#     for stall in stall_names:
+#         if boyer_moore_search(stall.lower(), stall_query.lower()):
+#             result.append(stall)
             
-    # Return a df with all matching stall names in list
-    df = df[df['stall_name'].isin(result)]
-    return df
+#     # Return a df with all matching stall names in list
+#     df = df[df['stall_name'].isin(result)]
+#     return df
+
+def show_stall_results(df, column_name, pattern):
+    pattern = pattern.lower()
+    matches = df.apply(lambda row: boyer_moore_search(row[column_name].lower(), pattern), axis=1)
+    return df[matches]
 
 # Search form
 with st.container(border=True):
@@ -117,7 +119,7 @@ with st.container(border=True):
 # Filter logic
 def filter_stalls(df):
     if stall_query:
-        df = show_stall_results(df)
+        df = show_stall_results(df, 'stall_name', stall_query)
     if price_filter:
         df = df[(df['lowest_price'] >= price_range[0]) & (df['highest_price'] <= price_range[1])]
     if rating_filter:
@@ -144,7 +146,7 @@ elif sort_price == "Price: High to Low":
 # Display stalls in a grid layout
 def display_stalls(filtered_stalls):
     try:
-        n_cards_per_row = 4
+        n_cards_per_row = 3
         rows = [filtered_stalls.iloc[i:i + n_cards_per_row] for i in range(0, len(filtered_stalls), n_cards_per_row)]
         for row in rows:
             cols = st.columns(n_cards_per_row)

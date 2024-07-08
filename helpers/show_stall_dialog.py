@@ -2,12 +2,11 @@ import streamlit as st
 from annotated_text import annotated_text
 from helpers.merge_sort import merge_sort
 
-@st.experimental_dialog("Stall Details", width="large")
+@st.experimental_dialog(f"Stall Details", width="large")
 def show_stall_dialog(stall_id, stall_name, stall_rating, stall_tags, stall_lowest_price, stall_highest_price, item_info_df):
     # Filter item_info_df by stall id to show available items and convert to dict
     menu_df = item_info_df[item_info_df['stall_id'] == stall_id]
     menu_df['price'] = menu_df['price'].astype('int')
-    
     
     # Create list of tags
     tag_list = [item.strip() for item in stall_tags.split(',')]
